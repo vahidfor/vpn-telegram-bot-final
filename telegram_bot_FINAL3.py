@@ -57,22 +57,85 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cursor.execute("INSERT OR IGNORE INTO users (id, username) VALUES (?, ?)", (user.id, user.username))
     conn.commit()
 
-    keyboard = [
-        ["📥 خرید اکانت", "📃 دریافت برنامه"],
-        ["🎁 فعال‌سازی کد تخفیف", "🏦 اعتبار من"],
-        ["🔁 انتقال اعتبار", "ℹ️ وضعیت من"],
-        ["🌐 دریافت سرویس‌ها", "💳 افزایش اعتبار"],
-        ["✉️ پیام به پشتیبانی"]
+    # دکمه‌های Inline (شیشه‌ای) برای تمام قابلیت‌ها
+    inline_keyboard_main = [
+        [InlineKeyboardButton("📥 خرید اکانت", callback_data="buy_account"),
+         InlineKeyboardButton("📃 دریافت برنامه", callback_data="get_app")],
+        [InlineKeyboardButton("🎁 فعال‌سازی کد تخفیف", callback_data="activate_discount"),
+         InlineKeyboardButton("🏦 اعتبار من", callback_data="my_credit_inline")], # Changed callback
+        [InlineKeyboardButton("🔁 انتقال اعتبار", callback_data="transfer_credit"),
+         InlineKeyboardButton("ℹ️ وضعیت من", callback_data="my_status_inline")], # Changed callback
+        [InlineKeyboardButton("🌐 دریافت سرویس‌ها", callback_data="get_services"),
+         InlineKeyboardButton("💳 افزایش اعتبار", callback_data="top_up_credit")],
+        [InlineKeyboardButton("✉️ پیام به پشتیبانی", callback_data="message_support"),
+         InlineKeyboardButton("درباره ما", callback_data="show_about")] # From previous step
     ]
-    # افزودن دکمه ادمین برای ادمین
-    if user.id == ADMIN_ID:
-        keyboard.append(["/admin"])
 
-    await update.message.reply_text("سلام! به ربات VPN خوش اومدی 👋", reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
+    # افزودن دکمه ادمین فقط اگر کاربر ادمین باشد. این دکمه را می‌توان همچنان به عنوان یک ReplyKeyboard گذاشت
+    # یا می‌توان آن را نیز به Inline Keyboard منتقل کرد. برای سادگی، به عنوان کامند یا یک دکمه جدا نگه می‌داریم
+    # اگر نیاز باشد کامند /admin را نیز به Inline Button تبدیل کنیم، باید یک callback_data و Handler جدا برای آن ساخت.
+    # فعلاً به درخواست قبلی (کامندها به صورت کامند بمانند) پایبندیم.
 
-# تابع جدید برای کامند /about
+    await update.message.reply_text(
+        "سلام! به ربات VPN خوش اومدی 👋\n"
+        "برای دسترسی به امکانات ربات از دکمه‌های زیر استفاده کنید:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard_main)
+    )
+    # اطمینان از حذف Reply Keyboard قبلی
+    await update.message.reply_text("👋", reply_markup=ReplyKeyboardRemove())
+
+
+# تابع جدید برای کامند /about و Callback "درباره ما"
 async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("تیم ویرا با هدف ایجاد دسترسی کامل افراد به اینترنت آزاد و بدون محدودیت شروع به کار کرد و این تیم زیر مجموعه (تیم پیوند هست )")
+    about_text = "تیم ویرا با هدف ایجاد دسترسی کامل افراد به اینترنت آزاد و بدون محدودیت شروع به کار کرد و این تیم زیر مجموعه (تیم پیوند هست )"
+    if update.callback_query: # اگر از طریق دکمه شیشه‌ای صدا زده شده
+        await update.callback_query.answer()
+        await update.callback_query.message.reply_text(about_text) # Reply to the message where the inline button was clicked
+    else: # اگر از طریق کامند مستقیم صدا زده شده
+        await update.message.reply_text(about_text)
+
+# توابع واسط برای ConversationHandlers که از Callback Query شروع می‌شوند
+async def buy_callback_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    return await buy(update, context)
+
+async def get_app_callback_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    return await get_app(update, context)
+
+async def activate_discount_callback_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    return await ask_discount(update, context)
+
+async def transfer_credit_callback_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    return await ask_target(update, context)
+
+async def get_services_callback_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    return await get_service(update, context)
+
+async def top_up_credit_callback_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    return await ask_topup(update, context)
+
+async def message_support_callback_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    return await message_to_support(update, context)
+
+# توابع مستقیمی که از Callback Query شروع می‌شوند
+async def my_credit_inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    # update.callback_query.message را به update.message تبدیل می‌کنیم تا تابع my_credit بدون تغییر کار کند
+    update._message = update.callback_query.message
+    await my_credit(update, context)
+
+async def my_status_inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    # update.callback_query.message را به update.message تبدیل می‌کنیم تا تابع my_status بدون تغییر کار کند
+    update._message = update.callback_query.message
+    await my_status(update, context)
+
 
 # مرحله اول خرید اکانت: انتخاب نوع اکانت
 async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -80,29 +143,59 @@ async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cursor.execute("SELECT is_approved FROM users WHERE id=?", (user_id,))
     approved = cursor.fetchone()[0]
     if not approved:
-        await update.message.reply_text("⛔ شما هنوز توسط ادمین تأیید نشده‌اید. لطفاً منتظر تأیید بمانید یا درخواست افزایش اعتبار ارسال کنید.")
+        # اگر از طریق callback_query آمده، باید به پیام اصلی پاسخ دهد
+        if update.callback_query:
+            await update.callback_query.message.reply_text("⛔ شما هنوز توسط ادمین تأیید نشده‌اید. لطفاً منتظر تأیید بمانید یا درخواست افزایش اعتبار ارسال کنید.")
+        else:
+            await update.message.reply_text("⛔ شما هنوز توسط ادمین تأیید نشده‌اید. لطفاً منتظر تأیید بمانید یا درخواست افزایش اعتبار ارسال کنید.")
         return ConversationHandler.END
 
     options = [["1 ماهه", "3 ماهه"], ["ویژه ❤️", "اکسس پوینت 🏠"]]
-    await update.message.reply_text("لطفاً نوع اکانت را انتخاب کنید:", reply_markup=ReplyKeyboardMarkup(options, resize_keyboard=True))
+    # پاسخ با ReplyKeyboardMarkup برای انتخاب گزینه‌ها در مکالمه
+    reply_markup = ReplyKeyboardMarkup(options, resize_keyboard=True, one_time_keyboard=True)
+    if update.callback_query:
+        await update.callback_query.message.reply_text("لطفاً نوع اکانت را انتخاب کنید:", reply_markup=reply_markup)
+    else:
+        await update.message.reply_text("لطفاً نوع اکانت را انتخاب کنید:", reply_markup=reply_markup)
     return 1 # حالت برای انتظار پاسخ کاربر
 
-# مرحله دوم خرید اکانت: ارسال درخواست به ادمین
+# مرحله دوم خرید اکانت: ارسال درخواست به ادمین (با دکمه ارسال اکانت)
 async def confirm_purchase(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    # کاربر را به حالت انتظار تأیید برمی‌گردانیم
+    requested_account_type = update.message.text # e.g., "1 ماهه"
+
+    # کاربر را به حالت انتظار تأیید برمی‌گردانیم (برای نمایش در لیست "تأیید کاربران" و جلوگیری از درخواست‌های بعدی تا ادمین رسیدگی کند)
     cursor.execute("UPDATE users SET is_approved = 0 WHERE id=?", (user.id,))
     conn.commit()
 
-    msg = f"🛒 درخواست خرید از:\n@{user.username} ({user.id})\nنوع: {update.message.text}"
-    await context.bot.send_message(ADMIN_ID, msg) # ارسال پیام به ادمین
-    await update.message.reply_text("✅ درخواست شما برای ادمین ارسال شد. لطفاً منتظر تأیید ادمین بمانید.")
+    # ایجاد دکمه اینلاین برای ادمین جهت ارسال اکانت
+    inline_keyboard_admin = [
+        [InlineKeyboardButton("✅ ارسال اکانت", callback_data=f"send_acc_to_{user.id}_{requested_account_type}")]
+    ]
+    reply_markup_admin = InlineKeyboardMarkup(inline_keyboard_admin)
+
+    msg_to_admin = (
+        f"🛒 درخواست خرید اکانت جدید:\n"
+        f"کاربر: @{user.username} (ID: {user.id})\n"
+        f"نوع اکانت درخواستی: {requested_account_type}\n"
+        f"لطفاً اکانت را ارسال کنید:"
+    )
+    await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text=msg_to_admin,
+        reply_markup=reply_markup_admin
+    )
+    await update.message.reply_text("✅ درخواست خرید شما به ادمین ارسال شد. لطفاً منتظر دریافت اکانت باشید.", reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END # پایان مکالمه
 
 # مرحله اول دریافت برنامه: انتخاب دستگاه
 async def get_app(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [["📱 اندروید", "🍏 آیفون"], ["🖥 ویندوز", "❓ راهنمای اتصال"]]
-    await update.message.reply_text("دستگاه خود را انتخاب کنید:", reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+    if update.callback_query:
+        await update.callback_query.message.reply_text("دستگاه خود را انتخاب کنید:", reply_markup=reply_markup)
+    else:
+        await update.message.reply_text("دستگاه خود را انتخاب کنید:", reply_markup=reply_markup)
     return 2 # حالت برای انتظار پاسخ کاربر
 
 # مرحله دوم دریافت برنامه: ارسال لینک یا راهنمای اتصال
@@ -178,6 +271,7 @@ async def send_app_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(links.get(selected_option, "❌ گزینه نامعتبر"))
 
+    await update.message.reply_text("👋", reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
 
 # مرحله اول دریافت سرویس‌ها: انتخاب سرویس
@@ -186,11 +280,18 @@ async def get_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cursor.execute("SELECT is_approved FROM users WHERE id=?", (user_id,))
     approved = cursor.fetchone()[0]
     if not approved:
-        await update.message.reply_text("⛔ شما هنوز توسط ادمین تأیید نشده‌اید. لطفاً منتظر تأیید بمانید.")
+        if update.callback_query:
+            await update.callback_query.message.reply_text("⛔ شما هنوز توسط ادمین تأیید نشده‌اید. لطفاً منتظر تأیید بمانید.")
+        else:
+            await update.message.reply_text("⛔ شما هنوز توسط ادمین تأیید نشده‌اید. لطفاً منتظر تأیید بمانید.")
         return ConversationHandler.END
 
     keyboard = [["🔐 OpenVPN", "🛰 V2Ray"], ["📡 Proxy تلگرام"]]
-    await update.message.reply_text("کدام سرویس را می‌خواهید؟", reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+    if update.callback_query:
+        await update.callback_query.message.reply_text("کدام سرویس را می‌خواهید؟", reply_markup=reply_markup)
+    else:
+        await update.message.reply_text("کدام سرویس را می‌خواهید؟", reply_markup=reply_markup)
     return 3 # حالت برای انتظار پاسخ کاربر
 
 # مرحله دوم دریافت سرویس: ارسال سرویس به کاربر
@@ -200,7 +301,7 @@ async def send_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cursor.execute("SELECT is_approved FROM users WHERE id=?", (user_id,))
     approved = cursor.fetchone()[0]
     if not approved:
-        await update.message.reply_text("⛔ در انتظار تأیید توسط ادمین هستید.")
+        await update.message.reply_text("⛔ در انتظار تأیید توسط ادمین هستید.", reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
 
     text = update.message.text
@@ -211,7 +312,7 @@ async def send_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
     }
     key = mapping.get(text)
     if not key:
-        await update.message.reply_text("❌ سرویس نامعتبر")
+        await update.message.reply_text("❌ سرویس نامعتبر", reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
 
     # خواندن content و is_file از دیتابیس
@@ -223,23 +324,26 @@ async def send_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 # ارسال فایل با استفاده از file_id ذخیره شده
                 await context.bot.send_document(chat_id=update.message.chat_id, document=content, caption="✅ فایل سرویس شما:")
-                await update.message.reply_text("توجه: وضعیت شما به 'در انتظار تأیید' تغییر کرد. برای درخواست‌های بعدی منتظر تأیید ادمین باشید.")
+                await update.message.reply_text("توجه: وضعیت شما به 'در انتظار تأیید' تغییر کرد. برای درخواست‌های بعدی منتظر تأیید ادمین باشید.", reply_markup=ReplyKeyboardRemove())
                 cursor.execute("UPDATE users SET is_approved = 0 WHERE id=?", (user_id,))
                 conn.commit()
             except Exception as e:
-                await update.message.reply_text(f"❌ خطا در ارسال فایل سرویس: {e}\nلطفاً با پشتیبانی تماس بگیرید.")
+                await update.message.reply_text(f"❌ خطا در ارسال فایل سرویس: {e}\nلطفاً با پشتیبانی تماس بگیرید.", reply_markup=ReplyKeyboardRemove())
         else: # اگر محتوا متن/لینک باشد
-            await update.message.reply_text(f"✅ لینک/فایل سرویس شما:\n{content}")
-            await update.message.reply_text("توجه: وضعیت شما به 'در انتظار تأیید' تغییر کرد. برای درخواست‌های بعدی منتظر تأیید ادمین باشید.")
+            await update.message.reply_text(f"✅ لینک/فایل سرویس شما:\n{content}", reply_markup=ReplyKeyboardRemove())
+            await update.message.reply_text("توجه: وضعیت شما به 'در انتظار تأیید' تغییر کرد. برای درخواست‌های بعدی منتظر تأیید ادمین باشید.", reply_markup=ReplyKeyboardRemove())
             cursor.execute("UPDATE users SET is_approved = 0 WHERE id=?", (user_id,))
             conn.commit()
     else:
-        await update.message.reply_text("⛔ سرویس فعلاً تنظیم نشده.")
+        await update.message.reply_text("⛔ سرویس فعلاً تنظیم نشده.", reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
 
 # مرحله اول فعال‌سازی کد تخفیف
 async def ask_discount(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("لطفاً کد تخفیف را وارد کنید:")
+    if update.callback_query:
+        await update.callback_query.message.reply_text("لطفاً کد تخفیف را وارد کنید:", reply_markup=ReplyKeyboardRemove())
+    else:
+        await update.message.reply_text("لطفاً کد تخفیف را وارد کنید:", reply_markup=ReplyKeyboardRemove())
     return 4 # حالت برای انتظار پاسخ کاربر
 
 # مرحله دوم فعال‌سازی کد تخفیف
@@ -249,35 +353,39 @@ async def apply_discount(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     cursor.execute("SELECT discount_used FROM users WHERE id=?", (user_id,))
     if cursor.fetchone()[0]:
-        await update.message.reply_text("⛔ شما قبلاً از کد تخفیف استفاده کرده‌اید.")
+        await update.message.reply_text("⛔ شما قبلاً از کد تخفیف استفاده کرده‌اید.", reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
 
     cursor.execute("SELECT value FROM codes WHERE code=?", (code,))
     row = cursor.fetchone()
     if row:
         value = row[0]
-        cursor.execute("UPDATE users SET credit = credit + ? WHERE id=?", (value, user_id))
+        cursor.execute("UPDATE users SET credit = credit + ?, discount_used = 1 WHERE id=?", (value, user_id))
         conn.commit()
-        await update.message.reply_text(f"✅ {value} تومان اعتبار اضافه شد.")
+        await update.message.reply_text(f"✅ {value} تومان اعتبار اضافه شد.", reply_markup=ReplyKeyboardRemove())
     else:
-        await update.message.reply_text("❌ کد تخفیف نامعتبر است.")
+        await update.message.reply_text("❌ کد تخفیف نامعتبر است.", reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
 
-# نمایش اعتبار کاربر
+# نمایش اعتبار کاربر (مربوط به /score و دکمه شیشه‌ای اعتبار من)
 async def my_credit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cursor.execute("SELECT credit FROM users WHERE id=?", (update.effective_user.id,))
     credit = cursor.fetchone()[0]
-    await update.message.reply_text(f"💳 اعتبار شما: {credit} تومان")
+    await update.message.reply_text(f"💳 اعتبار شما: {credit} تومان") # No ReplyKeyboardRemove needed here, as it's a direct info
+
 
 # مرحله اول انتقال اعتبار: پرسیدن ID دریافت‌کننده
 async def ask_target(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("لطفاً ID عددی دریافت‌کننده را وارد کنید:")
+    if update.callback_query:
+        await update.callback_query.message.reply_text("لطفاً ID عددی دریافت‌کننده را وارد کنید:", reply_markup=ReplyKeyboardRemove())
+    else:
+        await update.message.reply_text("لطفاً ID عددی دریافت‌کننده را وارد کنید:", reply_markup=ReplyKeyboardRemove())
     return 5 # حالت برای انتظار پاسخ کاربر
 
 # مرحله دوم انتقال اعتبار: پرسیدن مقدار اعتبار
 async def ask_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["target_id"] = int(update.message.text)
-    await update.message.reply_text("چه مقدار اعتبار منتقل شود؟")
+    await update.message.reply_text("چه مقدار اعتبار منتقل شود؟", reply_markup=ReplyKeyboardRemove())
     return 6 # حالت برای انتظار پاسخ کاربر
 
 # مرحله سوم انتقال اعتبار: انجام انتقال
@@ -289,15 +397,15 @@ async def do_transfer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cursor.execute("SELECT credit FROM users WHERE id=?", (sender,))
     current = cursor.fetchone()[0]
     if current < amount:
-        await update.message.reply_text("❌ اعتبار شما کافی نیست.")
+        await update.message.reply_text("❌ اعتبار شما کافی نیست.", reply_markup=ReplyKeyboardRemove())
     else:
         cursor.execute("UPDATE users SET credit = credit - ? WHERE id=?", (amount, sender))
         cursor.execute("UPDATE users SET credit = credit + ? WHERE id=?", (amount, receiver))
         conn.commit()
-        await update.message.reply_text("✅ انتقال انجام شد.")
+        await update.message.reply_text("✅ انتقال انجام شد.", reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END # پایان مکالمه
 
-# نمایش وضعیت کاربر
+# نمایش وضعیت کاربر (مربوط به /myinfo و دکمه شیشه‌ای وضعیت من)
 async def my_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     cursor.execute("SELECT credit, discount_used, is_approved FROM users WHERE id=?", (user.id,))
@@ -307,11 +415,15 @@ async def my_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 💳 اعتبار: {credit} تومان
 🎁 کد تخفیف: {"استفاده شده" if discount_used else "فعال نشده"}
 ✅ وضعیت تأیید: {"تأیید شده" if approved else "در انتظار تأیید"}
-""")
+""") # No ReplyKeyboardRemove needed here, as it's a direct info
+
 
 # مرحله اول افزایش اعتبار: پرسیدن جزئیات پرداخت
 async def ask_topup(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("مقدار و توضیحات پرداخت خود را وارد کنید:\nمثال: 100000 - کارت به کارت به 6274xxxxxxxxxxxx")
+    if update.callback_query:
+        await update.callback_query.message.reply_text("مقدار و توضیحات پرداخت خود را وارد کنید:\nمثال: 100000 - کارت به کارت به 6274xxxxxxxxxxxx", reply_markup=ReplyKeyboardRemove())
+    else:
+        await update.message.reply_text("مقدار و توضیحات پرداخت خود را وارد کنید:\nمثال: 100000 - کارت به کارت به 6274xxxxxxxxxxxx", reply_markup=ReplyKeyboardRemove())
     return 7 # حالت برای انتظار پاسخ کاربر
 
 # مرحله دوم افزایش اعتبار: ارسال درخواست به ادمین
@@ -323,7 +435,7 @@ async def send_topup_request(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     msg = f"💳 درخواست افزایش اعتبار از:\n@{user.username}\n🆔 {user.id}\n💬 توضیح: {update.message.text}"
     await context.bot.send_message(chat_id=ADMIN_ID, text=msg) # ارسال پیام به ادمین
-    await update.message.reply_text("✅ درخواست شما به ادمین ارسال شد. لطفاً منتظر تأیید ادمین بمانید.")
+    await update.message.reply_text("✅ درخواست شما به ادمین ارسال شد. لطفاً منتظر تأیید ادمین بمانید.", reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END # پایان مکالمه
 
 # پنل ادمین
@@ -371,7 +483,7 @@ async def ask_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not key:
         return
     context.user_data["servicetype"] = key # ذخیره نوع سرویس در context
-    await update.message.reply_text("لطفاً لینک، متن سرویس را وارد کنید یا **فایل مربوطه را ارسال نمایید:**")
+    await update.message.reply_text("لطفاً لینک، متن سرویس را وارد کنید یا **فایل مربوطه را ارسال نمایید:**", reply_markup=ReplyKeyboardRemove())
     return 8 # حالت برای انتظار پاسخ ادمین (فایل یا متن)
 
 # مرحله دوم افزودن سرویس: ذخیره سرویس در دیتابیس
@@ -383,13 +495,13 @@ async def save_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.document: # اگر پیام ادمین حاوی فایل بود
         content_to_save = update.message.document.file_id # ذخیره file_id تلگرام
         is_file_flag = 1
-        await update.message.reply_text(f"✅ فایل شما با File ID: `{content_to_save}` ذخیره شد.", parse_mode='Markdown')
+        await update.message.reply_text(f"✅ فایل شما با File ID: `{content_to_save}` ذخیره شد.", parse_mode='Markdown', reply_markup=ReplyKeyboardRemove())
     elif update.message.text: # اگر پیام ادمین حاوی متن بود
         content_to_save = update.message.text.strip()
         is_file_flag = 0
-        await update.message.reply_text("✅ سرویس متنی/لینک ذخیره شد.")
+        await update.message.reply_text("✅ سرویس متنی/لینک ذخیره شد.", reply_markup=ReplyKeyboardRemove())
     else: # اگر نه فایل بود و نه متن
-        await update.message.reply_text("❌ ورودی نامعتبر. لطفاً فایل یا متن/لینک ارسال کنید.")
+        await update.message.reply_text("❌ ورودی نامعتبر. لطفاً فایل یا متن/لینک ارسال کنید.", reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END # پایان مکالمه (می‌توانید حالت را نگه دارید تا ادمین دوباره تلاش کند)
 
     if content_to_save: # اگر محتوایی برای ذخیره وجود داشت
@@ -399,7 +511,7 @@ async def save_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # مرحله اول افزودن کد تخفیف (توسط ادمین)
 async def ask_discount_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("کد و مقدار را وارد کن (مثال: vip50 5000):")
+    await update.message.reply_text("کد و مقدار را وارد کن (مثال: vip50 5000):", reply_markup=ReplyKeyboardRemove())
     return 9 # حالت برای انتظار پاسخ ادمین
 
 # مرحله دوم افزودن کد تخفیف: ذخیره کد در دیتابیس
@@ -408,14 +520,14 @@ async def save_discount_code(update: Update, context: ContextTypes.DEFAULT_TYPE)
         code, val = update.message.text.strip().split()
         cursor.execute("INSERT INTO codes (code, value) VALUES (?, ?)", (code, int(val)))
         conn.commit()
-        await update.message.reply_text("✅ کد اضافه شد.")
+        await update.message.reply_text("✅ کد اضافه شد.", reply_markup=ReplyKeyboardRemove())
     except:
-        await update.message.reply_text("❌ فرمت اشتباه.")
+        await update.message.reply_text("❌ فرمت اشتباه.", reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END # پایان مکالمه
 
 # مرحله اول شارژ کاربر (توسط ادمین)
 async def ask_charge(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("ID کاربر و مبلغ (مثال: 123456789 10000):")
+    await update.message.reply_text("ID کاربر و مبلغ (مثال: 123456789 10000):", reply_markup=ReplyKeyboardRemove())
     return 10 # حالت برای انتظار پاسخ ادمین
 
 # مرحله دوم شارژ کاربر: انجام شارژ
@@ -424,14 +536,14 @@ async def do_charge(update: Update, context: ContextTypes.DEFAULT_TYPE):
         uid, amount = update.message.text.strip().split()
         cursor.execute("UPDATE users SET credit = credit + ? WHERE id=?", (int(amount), int(uid)))
         conn.commit()
-        await update.message.reply_text("✅ شارژ شد.")
+        await update.message.reply_text("✅ شارژ شد.", reply_markup=ReplyKeyboardRemove())
     except:
-        await update.message.reply_text("❌ خطا در ورودی.")
+        await update.message.reply_text("❌ خطا در ورودی.", reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END # پایان مکالمه
 
 # مرحله اول پیام همگانی (توسط ادمین)
 async def ask_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("پیام همگانی را ارسال کنید:")
+    await update.message.reply_text("پیام همگانی را ارسال کنید:", reply_markup=ReplyKeyboardRemove())
     return 11 # حالت برای انتظار پاسخ ادمین
 
 # مرحله دوم پیام همگانی: ارسال پیام به همه کاربران
@@ -444,12 +556,15 @@ async def send_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e: # برای مدیریت خطاهای احتمالی (مثل بلاک کردن ربات)
             print(f"Error sending broadcast to {uid}: {e}")
             continue
-    await update.message.reply_text("📢 پیام ارسال شد.")
+    await update.message.reply_text("📢 پیام ارسال شد.", reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END # پایان مکالمه
 
 # مرحله اول پیام به پشتیبانی
 async def message_to_support(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("لطفاً پیام خود را برای پشتیبانی ارسال کنید:")
+    if update.callback_query:
+        await update.callback_query.message.reply_text("لطفاً پیام خود را برای پشتیبانی ارسال کنید:", reply_markup=ReplyKeyboardRemove())
+    else:
+        await update.message.reply_text("لطفاً پیام خود را برای پشتیبانی ارسال کنید:", reply_markup=ReplyKeyboardRemove())
     return 12 # حالت برای انتظار پاسخ کاربر
 
 # مرحله دوم پیام به پشتیبانی: ارسال پیام به ادمین
@@ -459,17 +574,79 @@ async def send_support_message(update: Update, context: ContextTypes.DEFAULT_TYP
     msg_for_admin = f"✉️ پیام جدید از پشتیبانی:\nکاربر: @{user.username} (ID: {user.id})\nپیام: {support_message}"
 
     await context.bot.send_message(chat_id=ADMIN_ID, text=msg_for_admin)
-    await update.message.reply_text("✅ پیام شما به پشتیبانی ارسال شد. لطفاً منتظر پاسخ باشید.")
+    await update.message.reply_text("✅ پیام شما به پشتیبانی ارسال شد. لطفاً منتظر پاسخ باشید.", reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END # پایان مکالمه
+
+# **جدید: توابع و ثابت‌ها برای جریان ارسال اکانت توسط ادمین**
+SENDING_ACCOUNT_DETAILS = 13 # ثابت برای حالت مکالمه ادمین
+
+# New admin function to start sending account details
+async def start_send_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    # Extract user ID and requested account type from callback_data
+    # callback_data format: "send_acc_to_<user_id>_<account_type>"
+    parts = query.data.split('_')
+    target_user_id = int(parts[3])
+    # Reconstruct account type, as it might contain spaces
+    requested_account_type = " ".join(parts[4:])
+
+    # Store in context.user_data for the next state
+    context.user_data['target_user_id_for_account'] = target_user_id
+    context.user_data['requested_account_type'] = requested_account_type
+
+    await query.message.reply_text(
+        f"لطفاً مشخصات اکانت (مثلاً: لینک کانفیگ، یوزرنیم، پسورد) را برای کاربر ID: {target_user_id} (نوع: {requested_account_type}) ارسال کنید:",
+        reply_markup=ReplyKeyboardRemove() # Remove keyboard if any
+    )
+    # Edit the inline button message to show it's being processed
+    # Also remove the button to prevent multiple clicks
+    await query.edit_message_reply_markup(reply_markup=None)
+    # Append a confirmation to the original message for admin's clarity
+    await query.message.edit_text(query.message.text + "\n\n✅ شما در حال آماده‌سازی اکانت برای کاربر هستید.")
+
+    return SENDING_ACCOUNT_DETAILS # Go to the next state to receive account details
+
+# New admin function to send the account details to the user
+async def send_account_to_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    target_user_id = context.user_data.get('target_user_id_for_account')
+    requested_account_type = context.user_data.get('requested_account_type')
+    account_details_from_admin = update.message.text # Admin's message containing account details
+
+    if not target_user_id:
+        await update.message.reply_text("خطا: شناسه کاربر مقصد یافت نشد. لطفاً دوباره تلاش کنید.")
+        return ConversationHandler.END
+
+    try:
+        # Send account details to the user
+        await context.bot.send_message(
+            chat_id=target_user_id,
+            text=f"✨ اکانت {requested_account_type} شما آماده شد!:\n\n{account_details_from_admin}\n\n"
+                  "با آرزوی استفاده عالی از سرویس ما!"
+        )
+        # Inform admin
+        await update.message.reply_text(f"✅ مشخصات اکانت با موفقیت به کاربر ID: {target_user_id} ارسال شد.", reply_markup=ReplyKeyboardRemove())
+
+        # Clear user_data for next interaction
+        if 'target_user_id_for_account' in context.user_data:
+            del context.user_data['target_user_id_for_account']
+        if 'requested_account_type' in context.user_data:
+            del context.user_data['requested_account_type']
+
+    except Exception as e:
+        await update.message.reply_text(f"❌ خطا در ارسال اکانت به کاربر ID: {target_user_id}: {e}", reply_markup=ReplyKeyboardRemove())
+
+    return ConversationHandler.END # End the conversation
 
 
 # تابع اصلی
 def main():
     application = Application.builder().token(TOKEN).build()
 
-    # ConversationHandlers (حتماً قبل از MessageHandlerهای معمولی اضافه شوند)
+    # ConversationHandlers (با entry_points جدید برای CallbackQuery)
     buy_conv_handler = ConversationHandler(
-        entry_points=[MessageHandler(filters.Regex("^📥 خرید اکانت$"), buy)],
+        entry_points=[CallbackQueryHandler(buy_callback_entry, pattern="^buy_account$")],
         states={
             1: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirm_purchase)],
         },
@@ -477,7 +654,7 @@ def main():
     )
 
     app_conv_handler = ConversationHandler(
-        entry_points=[MessageHandler(filters.Regex("^📃 دریافت برنامه$"), get_app)],
+        entry_points=[CallbackQueryHandler(get_app_callback_entry, pattern="^get_app$")],
         states={
             2: [MessageHandler(filters.TEXT & ~filters.COMMAND, send_app_link)],
         },
@@ -485,7 +662,7 @@ def main():
     )
 
     service_conv_handler = ConversationHandler(
-        entry_points=[MessageHandler(filters.Regex("^🌐 دریافت سرویس‌ها$"), get_service)],
+        entry_points=[CallbackQueryHandler(get_services_callback_entry, pattern="^get_services$")],
         states={
             3: [MessageHandler(filters.TEXT & ~filters.COMMAND, send_service)],
         },
@@ -493,7 +670,7 @@ def main():
     )
 
     discount_conv_handler = ConversationHandler(
-        entry_points=[MessageHandler(filters.Regex("^🎁 فعال‌سازی کد تخفیف$"), ask_discount)],
+        entry_points=[CallbackQueryHandler(activate_discount_callback_entry, pattern="^activate_discount$")],
         states={
             4: [MessageHandler(filters.TEXT & ~filters.COMMAND, apply_discount)],
         },
@@ -501,7 +678,7 @@ def main():
     )
 
     transfer_conv_handler = ConversationHandler(
-        entry_points=[MessageHandler(filters.Regex("^🔁 انتقال اعتبار$"), ask_target)],
+        entry_points=[CallbackQueryHandler(transfer_credit_callback_entry, pattern="^transfer_credit$")],
         states={
             5: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_amount)],
             6: [MessageHandler(filters.TEXT & ~filters.COMMAND, do_transfer)],
@@ -510,7 +687,7 @@ def main():
     )
 
     topup_conv_handler = ConversationHandler(
-        entry_points=[MessageHandler(filters.Regex("^💳 افزایش اعتبار$"), ask_topup)],
+        entry_points=[CallbackQueryHandler(top_up_credit_callback_entry, pattern="^top_up_credit$")],
         states={
             7: [MessageHandler(filters.TEXT & ~filters.COMMAND, send_topup_request)],
         },
@@ -552,24 +729,39 @@ def main():
     )
 
     support_conv_handler = ConversationHandler(
-        entry_points=[MessageHandler(filters.Regex("^✉️ پیام به پشتیبانی$"), message_to_support)],
+        entry_points=[CallbackQueryHandler(message_support_callback_entry, pattern="^message_support$")],
         states={
             12: [MessageHandler(filters.TEXT & ~filters.COMMAND, send_support_message)],
         },
         fallbacks=[CommandHandler("start", start)],
     )
 
-    # افزودن Handlers به Application
+    # **جدید: ConversationHandler برای ارسال اکانت توسط ادمین**
+    send_account_conv_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(start_send_account, pattern=r"^send_acc_to_")], # Using regex for dynamic callback data
+        states={
+            SENDING_ACCOUNT_DETAILS: [MessageHandler(filters.TEXT & ~filters.COMMAND, send_account_to_user)],
+        },
+        fallbacks=[CommandHandler("start", start)],
+    )
+
+
+    # افزودن CommandHandlers (این‌ها تغییری نکردند)
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("admin", admin))
-    application.add_handler(CommandHandler("about", about)) # کامند جدید /about
-    application.add_handler(CommandHandler("score", my_credit)) # کامند جدید /score
-    application.add_handler(CommandHandler("myinfo", my_status)) # کامند جدید /myinfo
+    application.add_handler(CommandHandler("about", about))
+    application.add_handler(CommandHandler("score", my_credit))
+    application.add_handler(CommandHandler("myinfo", my_status))
 
-    application.add_handler(MessageHandler(filters.Regex("^🏦 اعتبار من$"), my_credit))
-    application.add_handler(MessageHandler(filters.Regex("^ℹ️ وضعیت من$"), my_status))
+    # افزودن CallbackQueryHandlers برای دکمه‌های شیشه‌ای مستقل
+    application.add_handler(CallbackQueryHandler(my_credit_inline_handler, pattern="^my_credit_inline$"))
+    application.add_handler(CallbackQueryHandler(my_status_inline_handler, pattern="^my_status_inline$"))
+    application.add_handler(CallbackQueryHandler(about, pattern="^show_about$")) # Using 'about' function for callback as well
+
+    # Handlers مربوط به پنل ادمین (که از MessageHandler استفاده می‌کنند و نیازی به تغییر به CallbackQueryHandler ندارند)
     application.add_handler(MessageHandler(filters.Regex("^🧾 تأیید کاربران$") & filters.User(ADMIN_ID), list_pending))
     application.add_handler(CallbackQueryHandler(approve_user, pattern="^approve_"))
+
 
     # افزودن ConversationHandlers
     application.add_handler(buy_conv_handler)
@@ -583,6 +775,7 @@ def main():
     application.add_handler(admin_charge_user_conv_handler)
     application.add_handler(admin_broadcast_conv_handler)
     application.add_handler(support_conv_handler)
+    application.add_handler(send_account_conv_handler) # **اضافه کردن Handler جدید**
 
 
     # اجرای ربات (polling)
